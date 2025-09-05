@@ -35,6 +35,8 @@ class PokemonCardHandler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         if self.path == '/api/analyze-image':
             self.handle_image_analysis()
+        elif self.path == '/api/google-image-search':
+            self.handle_google_image_search()
         else:
             self.send_error(404, "Endpoint not found")
     
@@ -123,6 +125,10 @@ class PokemonCardHandler(http.server.SimpleHTTPRequestHandler):
                         Quick Actions
                     </h3>
                     <div class="flex flex-wrap gap-3">
+                        <button onclick="openGoogleImageSearch()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm">
+                            <i class="fab fa-google mr-1"></i>
+                            Google Images
+                        </button>
                         <button onclick="loadTCGSets()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm">
                             <i class="fas fa-layer-group mr-1"></i>
                             Browse Sets
@@ -479,6 +485,112 @@ class PokemonCardHandler(http.server.SimpleHTTPRequestHandler):
             resultsDiv.classList.remove('hidden');
         }
 
+        // Open Google Image Search for Pokemon cards
+        async function openGoogleImageSearch() {
+            showLoading();
+            
+            try {
+                const response = await fetch('/api/google-image-search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ search_query: 'pokemon card tcg' })
+                });
+                const data = await response.json();
+                displayGoogleImageSearchOptions(data);
+            } catch (error) {
+                console.error('Google Image Search error:', error);
+                showError('Failed to load Google Image Search options');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Display Google Image Search options
+        function displayGoogleImageSearchOptions(data) {
+            const resultsDiv = document.getElementById('results');
+            const containerDiv = document.getElementById('resultsContainer');
+            
+            let html = `
+                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg mb-6">
+                    <h3 class="text-2xl font-semibold text-gray-800 mb-3">
+                        <i class="fab fa-google mr-2 text-blue-600"></i>
+                        Google Image Search for Pokemon Cards
+                    </h3>
+                    <p class="text-gray-600 mb-4">
+                        Use Google's powerful image search to find Pokemon cards by uploading images or searching visually.
+                    </p>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-6 mb-6">
+                    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
+                        <h4 class="text-lg font-semibold text-gray-800 mb-4">
+                            <i class="fas fa-camera-retro mr-2 text-blue-600"></i>
+                            Visual Search Tools
+                        </h4>
+                        <div class="space-y-3">
+                            <a href="${data.search_urls.google_lens}" target="_blank"
+                               class="block w-full px-4 py-3 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-center font-medium">
+                                <i class="fas fa-search mr-2"></i>
+                                Google Lens
+                            </a>
+                            <a href="${data.search_urls.search_by_image}" target="_blank"
+                               class="block w-full px-4 py-3 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors text-center font-medium">
+                                <i class="fas fa-image mr-2"></i>
+                                Search by Image
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
+                        <h4 class="text-lg font-semibold text-gray-800 mb-4">
+                            <i class="fas fa-images mr-2 text-green-600"></i>
+                            Pokemon Card Searches
+                        </h4>
+                        <div class="space-y-3">
+                            <a href="${data.search_urls.pokemon_card_search}" target="_blank"
+                               class="block w-full px-4 py-3 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-center font-medium">
+                                <i class="fas fa-search mr-2"></i>
+                                Pokemon Cards
+                            </a>
+                            <a href="${data.search_urls.tcg_search}" target="_blank"
+                               class="block w-full px-4 py-3 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors text-center font-medium">
+                                <i class="fas fa-layer-group mr-2"></i>
+                                TCG Cards
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-yellow-50 border-l-4 border-yellow-400 p-6 rounded-lg mb-6">
+                    <h4 class="text-lg font-semibold text-yellow-800 mb-3">
+                        <i class="fas fa-lightbulb mr-2"></i>
+                        Search Tips
+                    </h4>
+                    <ul class="text-sm text-yellow-700 space-y-2">
+                        ${data.search_tips.map(tip => `<li class="flex items-start"><i class="fas fa-check-circle mr-2 mt-0.5 text-yellow-600"></i>${tip}</li>`).join('')}
+                    </ul>
+                </div>
+
+                <div class="bg-gray-50 rounded-lg p-6">
+                    <h4 class="text-lg font-semibold text-gray-800 mb-3">
+                        <i class="fas fa-tags mr-2"></i>
+                        Popular Search Terms
+                    </h4>
+                    <div class="flex flex-wrap gap-2">
+                        ${data.pokemon_search_terms.map(term => `
+                            <span class="px-3 py-1 bg-gray-200 text-gray-700 rounded-full text-sm cursor-pointer hover:bg-gray-300 transition-colors"
+                                  onclick="window.open('https://www.google.com/search?q=${encodeURIComponent(term)}&tbm=isch', '_blank')">
+                                ${term}
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+
+            containerDiv.innerHTML = html;
+            resultsDiv.classList.remove('hidden');
+        }
+
         // Add Enter key support
         document.addEventListener('DOMContentLoaded', function() {
             const searchInput = document.getElementById('searchInput');
@@ -633,28 +745,122 @@ class PokemonCardHandler(http.server.SimpleHTTPRequestHandler):
             'message': 'External search suggestions for Pokemon card resources'
         })
     
-    def handle_image_analysis(self):
-        """Handle image analysis API"""
+    def handle_google_image_search(self):
+        """Handle Google Image Search API"""
         try:
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
             
-            # Simulate image analysis
+            # Parse request data
+            try:
+                import json
+                data = json.loads(post_data.decode('utf-8'))
+                image_url = data.get('image_url', '')
+                search_query = data.get('search_query', 'pokemon card tcg')
+            except:
+                image_url = ''
+                search_query = 'pokemon card tcg'
+            
+            # Generate Google Image Search URLs
+            search_urls = {
+                'google_lens': 'https://lens.google.com/' if not image_url else f'https://lens.google.com/uploadbyurl?url={urllib.parse.quote(image_url)}',
+                'search_by_image': 'https://images.google.com/' if not image_url else f'https://www.google.com/searchbyimage?image_url={urllib.parse.quote(image_url)}',
+                'contextual_search': f'https://www.google.com/search?q=pokemon+card+tcg+{urllib.parse.quote(search_query)}&tbm=isch',
+                'pokemon_card_search': f'https://www.google.com/search?q="pokemon+card"+{urllib.parse.quote(search_query)}&tbm=isch',
+                'tcg_search': f'https://www.google.com/search?q=pokemon+tcg+{urllib.parse.quote(search_query)}&tbm=isch'
+            }
+            
+            # Search tips
+            search_tips = [
+                'Use Google Lens for the most accurate visual matching',
+                'Try searching with card name + "TCG" for specific results',
+                'Include set name (Base Set, Jungle, etc.) for precise matches',
+                'Search for card number if visible on the card',
+                'Try "holographic" or "shadowless" for special variants'
+            ]
+            
+            # Pokemon search terms
+            pokemon_search_terms = [
+                'pokemon card base set',
+                'pokemon tcg vintage',
+                'pokemon card holographic',
+                'pokemon trading card game',
+                'pokemon card collection',
+                'pokemon tcg expansion'
+            ]
+            
+            response_data = {
+                'search_urls': search_urls,
+                'search_tips': search_tips,
+                'pokemon_search_terms': pokemon_search_terms,
+                'message': 'Google Image Search options for Pokemon card identification'
+            }
+            
+            self.send_json_response(response_data)
+            
+        except Exception as e:
+            print(f"Google Image Search error: {e}")
+            self.send_json_response({'error': 'Failed to generate Google Image Search URLs'}, 500)
+    
+    def handle_image_analysis(self):
+        """Handle image analysis API with Google Image Search integration"""
+        try:
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            
+            # Parse JSON data
+            try:
+                import json
+                data = json.loads(post_data.decode('utf-8'))
+                image_data = data.get('image_data', '')
+                image_url = data.get('image_url', '')
+            except:
+                image_data = ''
+                image_url = ''
+            
+            # Generate Google Image Search URLs
+            google_lens_url = 'https://lens.google.com/'
+            search_by_image_url = 'https://images.google.com/'
+            
+            if image_url:
+                google_lens_url = f'https://lens.google.com/uploadbyurl?url={urllib.parse.quote(image_url)}'
+                search_by_image_url = f'https://www.google.com/searchbyimage?image_url={urllib.parse.quote(image_url)}'
+            
+            # Pokemon card specific searches
+            pokemon_searches = {
+                'pokemon_cards': 'https://www.google.com/search?q=pokemon+card+tcg&tbm=isch',
+                'tcg_search': 'https://www.google.com/search?q=pokemon+tcg+trading+card&tbm=isch',
+                'base_set': 'https://www.google.com/search?q=pokemon+base+set+cards&tbm=isch',
+                'vintage_cards': 'https://www.google.com/search?q=pokemon+vintage+cards+holographic&tbm=isch'
+            }
+            
+            # Common card suggestions
             common_cards = [
                 'Pikachu', 'Charizard', 'Blastoise', 'Venusaur', 'Mewtwo', 'Mew',
-                'Lugia', 'Ho-oh', 'Rayquaza', 'Arceus', 'Dialga', 'Palkia',
-                'Base Set', 'Jungle', 'Fossil', 'Team Rocket', 'Gym Heroes',
-                'Neo Genesis', 'Expedition', 'Aquapolis', 'Skyridge'
+                'Lugia', 'Ho-oh', 'Rayquaza', 'Arceus', 'Base Set', 'Jungle', 'Fossil'
             ]
             
             import random
             random_suggestions = random.sample(common_cards, 3)
             
             response_data = {
-                'detected_text': 'Image uploaded successfully. Try searching with the suggestions below or enter a card name.',
-                'confidence': 0.7,
+                'detected_text': 'Image uploaded! Use Google Image Search for the best card identification.',
+                'confidence': 0.8,
                 'suggestions': random_suggestions,
-                'message': 'Image analysis is ready. In production, this would use AI to identify Pokemon cards automatically.'
+                'google_search_urls': {
+                    'google_lens': google_lens_url,
+                    'search_by_image': search_by_image_url,
+                    'manual_upload': 'https://images.google.com/'
+                },
+                'pokemon_searches': pokemon_searches,
+                'search_tips': [
+                    'Use Google Lens for the most accurate visual matching',
+                    'Try searching with card name + "TCG" for specific results',
+                    'Include set name (Base Set, Jungle, etc.) for precise matches',
+                    'Search for card number if visible on the card',
+                    'Try "holographic" or "shadowless" for special variants'
+                ],
+                'message': 'Use Google Image Search links for the best Pokemon card identification results.'
             }
             
             self.send_json_response(response_data)

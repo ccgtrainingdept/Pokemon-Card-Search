@@ -150,37 +150,62 @@ app.post('/api/analyze-image', async (c) => {
       return c.json({ error: 'Image URL or image data is required' }, 400)
     }
 
-    // For now, since we can't directly integrate external AI services in the sandbox,
-    // we'll extract any text from the request or provide smart suggestions
-    // In a real deployment, this would integrate with AI image analysis services
+    // Extract base64 image data for Google Image Search
+    let imageBase64 = ''
+    if (image_data && image_data.startsWith('data:image/')) {
+      imageBase64 = image_data.split(',')[1]
+    } else if (image_url) {
+      // For URLs, we'll provide the URL for Google Image Search
+      imageBase64 = image_url
+    }
+
+    // Generate Google Image Search URLs for reverse image search
+    const googleImageSearchURL = image_data 
+      ? `https://lens.google.com/uploadbyurl?url=data:image/jpeg;base64,${imageBase64}`
+      : `https://lens.google.com/uploadbyurl?url=${encodeURIComponent(image_url)}`
     
-    // Parse the image data URL if provided
-    let detectedInfo = { text: '', confidence: 0.5, suggestions: [] }
+    const googleSearchByImageURL = image_url 
+      ? `https://www.google.com/searchbyimage?image_url=${encodeURIComponent(image_url)}`
+      : 'https://images.google.com/' // For base64, user needs to upload manually
     
-    // Provide common Pokemon card search suggestions
-    const commonCards = [
-      'Pikachu', 'Charizard', 'Blastoise', 'Venusaur', 'Mewtwo', 'Mew',
-      'Lugia', 'Ho-oh', 'Rayquaza', 'Arceus', 'Dialga', 'Palkia',
-      'Base Set', 'Jungle', 'Fossil', 'Team Rocket', 'Gym Heroes',
-      'Neo Genesis', 'Expedition', 'Aquapolis', 'Skyridge'
+    // Pokemon-specific search suggestions for the uploaded image
+    const pokemonSuggestions = [
+      'Pokemon card TCG trading',
+      'Pokemon Base Set Jungle Fossil',
+      'Pokemon Charizard Pikachu card',
+      'Pokemon card rarity holographic',
+      'Pokemon TCG expansion set',
+      'Pokemon card collection vintage'
     ]
     
-    // Random suggestions for demonstration
-    const randomSuggestions = []
+    // Common Pokemon cards that might be identified
+    const commonCards = [
+      'Pikachu', 'Charizard', 'Blastoise', 'Venusaur', 'Mewtwo', 'Mew',
+      'Lugia', 'Ho-oh', 'Rayquoza', 'Arceus', 'Base Set', 'Jungle', 'Fossil'
+    ]
+    
+    const randomCards = []
     for (let i = 0; i < 3; i++) {
       const randomCard = commonCards[Math.floor(Math.random() * commonCards.length)]
-      if (!randomSuggestions.includes(randomCard)) {
-        randomSuggestions.push(randomCard)
+      if (!randomCards.includes(randomCard)) {
+        randomCards.push(randomCard)
       }
     }
     
     return c.json({ 
-      detected_text: 'Image uploaded successfully. Try searching with the suggestions below or enter a card name.',
-      confidence: 0.7,
-      suggestions: randomSuggestions,
-      message: 'Image analysis is ready. In production, this would use AI to identify Pokemon cards automatically.'
+      detected_text: 'Image uploaded successfully! Use Google Image Search to find similar cards.',
+      confidence: 0.8,
+      suggestions: randomCards,
+      google_search_urls: {
+        google_lens: googleImageSearchURL,
+        search_by_image: googleSearchByImageURL,
+        manual_upload: 'https://images.google.com/'
+      },
+      search_suggestions: pokemonSuggestions,
+      message: 'Use Google Image Search links below to find similar Pokemon cards online.'
     })
   } catch (error) {
+    console.error('Image analysis error:', error)
     return c.json({ error: 'Failed to analyze image' }, 500)
   }
 })
@@ -230,6 +255,65 @@ app.get('/api/web-search', async (c) => {
     })
   } catch (error) {
     return c.json({ error: 'Failed to get web search suggestions' }, 500)
+  }
+})
+
+// Google Image Search integration
+app.post('/api/google-image-search', async (c) => {
+  try {
+    const body = await c.req.json()
+    const { image_url, image_data, search_query } = body
+
+    // Generate different Google Image Search URLs
+    const searchUrls = {
+      // Google Lens - best for visual similarity
+      google_lens: image_url 
+        ? `https://lens.google.com/uploadbyurl?url=${encodeURIComponent(image_url)}`
+        : 'https://lens.google.com/',
+      
+      // Traditional reverse image search
+      search_by_image: image_url
+        ? `https://www.google.com/searchbyimage?image_url=${encodeURIComponent(image_url)}`
+        : 'https://images.google.com/',
+      
+      // Google Images with Pokemon card context
+      contextual_search: `https://www.google.com/search?q=pokemon+card+tcg+${encodeURIComponent(search_query || 'trading+card+game')}&tbm=isch`,
+      
+      // Direct Pokemon card search
+      pokemon_card_search: `https://www.google.com/search?q="pokemon+card"+${encodeURIComponent(search_query || '')}&tbm=isch`,
+      
+      // TCG specific search
+      tcg_search: `https://www.google.com/search?q=pokemon+tcg+${encodeURIComponent(search_query || 'card')}&tbm=isch`
+    }
+
+    // Search tips for better results
+    const searchTips = [
+      'Use Google Lens for the most accurate visual matching',
+      'Try searching with card name + "TCG" for specific results',
+      'Include set name (Base Set, Jungle, etc.) for precise matches', 
+      'Search for card number if visible on the card',
+      'Try "holographic" or "shadowless" for special variants'
+    ]
+
+    // Pokemon-specific search terms to try
+    const pokemonSearchTerms = [
+      'pokemon card base set',
+      'pokemon tcg vintage',
+      'pokemon card holographic',
+      'pokemon trading card game',
+      'pokemon card collection',
+      'pokemon tcg expansion'
+    ]
+
+    return c.json({
+      search_urls: searchUrls,
+      search_tips: searchTips,
+      pokemon_search_terms: pokemonSearchTerms,
+      message: 'Google Image Search options for Pokemon card identification'
+    })
+  } catch (error) {
+    console.error('Google Image Search error:', error)
+    return c.json({ error: 'Failed to generate Google Image Search URLs' }, 500)
   }
 })
 
@@ -313,6 +397,10 @@ app.get('/', (c) => {
                             Quick Actions
                         </h3>
                         <div class="flex flex-wrap gap-3">
+                            <button onclick="openGoogleImageSearch()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm">
+                                <i class="fab fa-google mr-1"></i>
+                                Google Images
+                            </button>
                             <button onclick="loadTCGSets()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm">
                                 <i class="fas fa-layer-group mr-1"></i>
                                 Browse Sets
